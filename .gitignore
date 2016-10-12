@@ -1,0 +1,9 @@
+/proj_*
+!/proj_*.c
+/core
+/Makefile
+/tute9*
+/gmon.out
+/prof_output*
+/pgplot*.log
+/matrices.c
