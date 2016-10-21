@@ -2,6 +2,8 @@
 #include <math.h>
 #include <stdlib.h>
 #include <time.h>
+//#include <memory.h>
+//#include <errno.h>
 #include "cpgplot.h"
 
 #ifndef EXIT_FAILURE
@@ -11,6 +13,17 @@
 #define EXIT_SUCCESS 0
 #endif
 
+#define pi 3.1415926
+#define w 0.2625
+
+#define ARRAY_SIZE 50272
+
+#define initial_x 2
+#define initial_y 2
+#define initial_A 2
+#define initial_B 2
+#define initial_P_diagonal_val 0.1
+#define initial_R_diagonal_val 0.0036
 
 typedef struct _matrix matrix;
 
@@ -56,7 +69,7 @@ double val(matrix * me, int row, int col)
 }
 
 //
-// Create a matrix. caller must detroy it after use.
+// Create a matrix. caller must destroy it after use.
 //
 matrix * create_matrix(int nrows, int ncols)
 {
@@ -95,24 +108,37 @@ matrix * transpose(matrix * me)
 
 //
 // Add a matrix to a matrix.
-// Return 0 if dimensions don't match.
-// Returns 1 on success
+// Returns sum matrix on success
+// Dimensions of me matrix must equal number of dimensions of other
+// Result has dimensions of (me->m_nrows, me->n_cols)
+// If dimensions don't match return a NULL pointer.
+// User must destroy returned matrix
 //
-int AddMatrix(matrix * me, matrix * other)
+matrix * AddOrSubMatrix(matrix *me, matrix *other, char add_or_sub)
 {
-    if(me->m_nrows != other->m_nrows)
-        return 0;
-    if(me->m_ncols != other->m_ncols)
-        return 0;
+    matrix * sum = create_matrix(me->m_nrows, me->m_ncols);
+
+    if (me->m_nrows != other->m_nrows)
+        return NULL;
+    if (me->m_ncols != other->m_ncols)
+        return NULL;
+
     int i,j;
-    for(i=0; i< me->m_nrows; i++)
+    for (i=0; i< me->m_nrows; i++)
     {
-        for(j=0;j< me->m_ncols; j++)
+        for (j=0;j< me->m_ncols; j++)
         {
-            me->array[i][j] += other->array[i][j];
+            if (add_or_sub == 'a') {
+                sum->array[i][j] = me->array[i][j] + other->array[i][j];
+            } else {
+                sum->array[i][j] = me->array[i][j] - other->array[i][j];
+                double test1 = me->array[i][j];
+                double test2 = other->array[i][j];
+                double test3 = me->array[i][j];
+            }
         }
     }
-    return 1;
+    return sum;
 }
 
 //
@@ -135,22 +161,23 @@ void ScaleMatrix(matrix * me, double scale)
 // Number of columns of left matrix must equal number of rows of right
 // Result has dimensions of (left->m_nrows,right->n_cols)
 // If rows and cols don;t match return a NULL pointer.
-// User must destory returned matrix
+// User must destroy returned matrix
 //
 matrix * MultMatrix(matrix * left, matrix * right)
 {
-    if(left->m_nrows != right->m_ncols)
+    if (left->m_ncols != right->m_nrows)
         return NULL;
-    matrix *newm = create_matrix(left->m_nrows,right->m_ncols);
+    matrix *newm = create_matrix(left->m_nrows, right->m_ncols);
     int i,j,k;
-    for(i=0; i< left->m_nrows; i++)
+    for (i=0; i< left->m_nrows; i++)
     {
-        for(j=0; j< right->m_ncols; j++)
+        for (j=0; j< right->m_ncols; j++)
         {
             newm->array[i][j] = 0.0;
-            for(k=0;k< left->m_ncols;k++)
+            for (k=0;k< left->m_ncols;k++)
             {
-                newm->array[i][j] += left->array[i][k]*right->array[k][j];
+                double temp = left->array[i][k] * right->array[k][j];
+                newm->array[i][j] += left->array[i][k] * right->array[k][j];
             }
         }
     }
@@ -160,7 +187,7 @@ matrix * MultMatrix(matrix * left, matrix * right)
 //
 // Make a copy of a matrix. Caller must destroy the matrix
 //
-matrix * clone( matrix * me)
+matrix * clone(matrix * me)
 {
     matrix * cme = create_matrix(me->m_nrows,me->m_ncols);
     int i,j;
@@ -214,7 +241,7 @@ matrix * Invert(matrix * me)
             }
         }
     }
-    if( size == 1)
+    if(size == 1)
     {
         inverse->array[0][0] = 1.0/me->array[0][0];
         return inverse;
@@ -225,12 +252,12 @@ matrix * Invert(matrix * me)
     for(i=0;i<size;i++)
     {
         p = cme->array[i][i];
-        if(fabs(p) < 1.0e-100)
-        {
-            destroy_matrix(inverse);
-            destroy_matrix(cme);
-            return NULL;
-        }
+//        if(fabs(p) < 1.0e-100)
+//        {
+//            destroy_matrix(inverse);
+//            destroy_matrix(cme);
+//            return NULL;
+//        }
         for(j=i;j< size;j++)
         {
             if(j == i)
@@ -277,81 +304,323 @@ matrix * Invert(matrix * me)
 // returns the number of elements in xval and yval in the pointers
 // sizeX and sizeY
 //
-void readData( double xval[], double yval[], int * sizeX, int * sizeY)
+void readData(double ** xval, double ** yval, int * sizeX, int * sizeY)
 {
-    FILE* fx_data = fopen("x_data_p06.dat", "rb");
-    FILE* fy_data = fopen("y_data_p06.dat", "rb");
+    // use on compphys server
+    FILE* fx_data = fopen("/home/shudson1/proj_5/x_data_p06.dat", "rb");
+    FILE* fy_data = fopen("/home/shudson1/proj_5/y_data_p06.dat", "rb");
+
+    // use on virtual machine on mac
+//    FILE* fx_data = fopen("/home/compphys/__uni_current/x_data_p06.dat", "rb");
+//    FILE* fy_data = fopen("/home/compphys/__uni_current/y_data_p06.dat", "rb");
+
+//    printf("Results of read()! %s\n", strerror(errno));
     fseek(fx_data, 0, SEEK_END);
     fseek(fy_data, 0, SEEK_END);
     int isizeX = (int) ftell(fx_data);
     int isizeY = (int) ftell(fy_data);
-    xval = malloc(isizeX*sizeof(double));
-    yval = malloc(isizeY*sizeof(double));
+    (*xval) = (double *) malloc(isizeX*sizeof(double));
+    (*yval) = (double *) malloc(isizeY*sizeof(double));
     rewind(fx_data);
     rewind(fy_data);
-    fread(xval, 8, isizeX, fx_data);
-    fread(yval, 8, isizeY, fy_data);
+    size_t unused_1 = fread((*xval), 8, isizeX, fx_data);
+    size_t unused_2 = fread((*yval), 8, isizeY, fy_data);
     (*sizeX) = isizeX;
     (*sizeY) = isizeY;
 }
 
+//
+// create 1 D array of double in memory
+//
+static double * create_1d_array_d(int cols)
+{
+    double * p1dArray = malloc(cols*sizeof(double));
+    return p1dArray;
+}
+
+//
+// Destroy a created 1D array of double
+//
+static void destroy_1d_array_d(double p1dArray[])
+{
+    free(p1dArray);
+}
+
+void fill_diagonal(matrix *m, double val) {
+    int j, k;
+
+    for (j = 0; j < (m->m_nrows); j = j + 1) {
+        for (k = 0; k < (m->m_ncols); k = k + 1) {
+            m->array[j][k] = 0.0;
+
+            if (j == k) {
+                m->array[j][k] = val;
+            }
+        }
+    }
+}
+
+void fill_with_rand(matrix * ma, int nrows, int ncols) {
+    int j, k;
+
+    for (j = 0; j < (ma->m_nrows); j = j + 1) {
+        for (k = 0; k < (ma->m_ncols); k = k + 1) {
+            ma->array[j][k] = drand48();
+        }
+    }
+}
+
+void fill_with_zeros(matrix * m) {
+    int j, k;
+
+    for (j = 0; j < (m->m_nrows); j = j + 1) {
+        for (k = 0; k < (m->m_ncols); k = k + 1) {
+            m->array[j][k] = 0;
+        }
+    }
+}
+
+void initialise_propagation_H(matrix *m) {
+    fill_with_zeros(m);
+
+    m->array[0][0] = 1;
+    m->array[1][1] = 1;
+}
+
+void update_propagation_H(matrix *m, double t) {
+    m->array[0][2] = cos(w * t);
+    m->array[1][3] = sin(w * t);
+}
+
+void fill_propagation_covariance_P(matrix *m) {
+    fill_diagonal(m, initial_P_diagonal_val);
+}
+
+double calculate_time(double initial_t, int counter) {
+    return initial_t + (counter * (1.0/2000.0));
+}
+
+static void disp_plot(int num, double *x_vals, double *y_vals, double x_min, double x_max, double y_min, double y_max, matrix *m, double initial_t, char *heading, char *x_label, char *y_label)
+{
+    static float f_x_vals[ARRAY_SIZE];
+    static float f_y_vals[ARRAY_SIZE];
+
+    int i;
+
+    for (i = 0; i < num; i++)
+    {
+        f_x_vals[i] = (float) x_vals[i];
+        f_y_vals[i] = (float) y_vals[i];
+    }
+
+    float fxmin, fxmax, fymin, fymax;
+    fxmin = (float) x_min;
+    fxmax = (float) x_max;
+    fymin = (float) y_min;
+    fymax = (float) y_max;
+
+    // set up ellipse
+    int ellipse_counter;
+    static float f_ell_x_vals[ARRAY_SIZE];
+    static float f_ell_y_vals[ARRAY_SIZE];
+    double x_0 = m->array[0][0];
+    double y_0 = m->array[1][0];
+    double A = m->array[2][0];
+    double B = m->array[3][0];
+    double w_t;
+
+    for (ellipse_counter = 0; ellipse_counter < num; ellipse_counter++) {
+        w_t = w * calculate_time(initial_t, ellipse_counter);
+        f_ell_x_vals[ellipse_counter] = (float)(x_0 + A * cos(w_t));
+        f_ell_y_vals[ellipse_counter] = (float)(y_0 + B * sin(w_t));
+    }
+
+    cpgbbuf();
+
+    cpgsci(14);
+    cpgenv(fxmin, fxmax, fymin, fymax, 0, 1);
+
+    cpgsci(14);
+    cpglab(x_label, y_label, heading);
+
+    // target
+    cpgsci(1);
+    cpgcirc((float)-0.1, 1.3, 0.02);
+
+    // data points scatterplot
+    cpgsci(1);
+    cpgpt(num, f_x_vals, f_y_vals, -1);
+
+    // ellipse
+    cpgsci(3);
+    cpgline(num, f_ell_x_vals, f_ell_y_vals);
+
+    cpgebuf();
+}
+
+double add_percent(double val, double add) {
+    return val + (val * add);
+}
+
+double trace(matrix * m) {
+    int j, k;
+    double ret_val = 0.0;
+
+    for (j = 0; j < (m->m_nrows); j = j + 1) {
+        for (k = 0; k < (m->m_ncols); k = k + 1) {
+            if (j == k) {
+                ret_val += m->array[j][k];
+            }
+        }
+    }
+
+    return ret_val;
+}
+
 int main(void)
 {
-    int rows, cols;
-    matrix * testm = NULL;
-    matrix * testi = NULL;
-    matrix * multmi = NULL;
-    int i,j;
-    char inp[20];
-    inp[0] = 'y';
-    srand48(time(NULL));
-    while(inp[0] == 'y')
-    {
-        printf("input number rows, cols :");
-        scanf("%d,%d",&rows,&cols);
-        //    printf("Number rows %d no cols %d \n",rows,cols);
-        testm = create_matrix(rows,cols);
-        printf("Created array \n");
-        for(i=0;i<rows;i++)
-        {
-            for(j=0;j<cols;j++)
-            {
-                testm->array[i][j] = 1.0 - 2.0*drand48();
-            }
-        }
-        printf("Initial is \n");
-        print_matrix(testm);
-        if(rows == cols)
-        {
-            testi = Invert(testm);
-            if(testi != NULL)
-            {
-                printf("Inverted matrix is \n");
-                print_matrix(testi);
-                printf("Matrix times invert is \n");
-                multmi =  MultMatrix(testm, testi);
-                print_matrix(multmi);
-                destroy_matrix(testi);
-                destroy_matrix(multmi);
-            }
-            else
-            {
-                printf("Matrix is singular \n");
-            }
-        }
-        else
-        {
-            testi = transpose(testm);
-            printf("transposed matrix is \n");
-            print_matrix(testi);
-            multmi =  MultMatrix(testi,testm);
-            printf("transposed matrix times original is \n");
-            print_matrix(multmi);
-            destroy_matrix(testi);
-            destroy_matrix(multmi);
-        }
-        destroy_matrix(testm);
-        printf("Another try? (y or n):");
-        scanf("%s",inp);
+    srand48((int) time(NULL));
+
+    double initial_t = pi * 2;
+    double final_t = pi * 3;
+
+    double * data_meas_arr_x = NULL;
+    double * data_meas_arr_y = NULL;
+    int data_size_x = 0;
+    int data_size_y = 0;
+
+    readData(&data_meas_arr_x, &data_meas_arr_y, &data_size_x, &data_size_y);
+
+    printf("First two measurements - x: %lf, y: %lf\n", data_meas_arr_x[0], data_meas_arr_y[0]);
+
+    /*
+    int look_at_data_counter;
+
+    for (look_at_data_counter = 0; look_at_data_counter < 5; look_at_data_counter++) {
+        printf("data_meas_arr_x: %lf, data_meas_arr_y: %lf\n", data_meas_arr_x[look_at_data_counter], data_meas_arr_y[look_at_data_counter]);
     }
+    */
+
+    // theta
+    matrix * state_vector_theta_k = create_matrix(4, 1);
+    matrix * state_vector_theta_k_minus_1 = create_matrix(4, 1);
+    state_vector_theta_k_minus_1->array[0][0] = initial_x;
+    state_vector_theta_k_minus_1->array[1][0] = initial_y;
+    state_vector_theta_k_minus_1->array[2][0] = initial_A;
+    state_vector_theta_k_minus_1->array[3][0] = initial_B;
+
+//    print_matrix(state_vector_theta_k_minus_1);
+
+    matrix * measurement_m = create_matrix(2, 1);
+    fill_with_zeros(measurement_m);
+
+    matrix * measurement_covariance_R = create_matrix(2, 2);
+
+    fill_diagonal(measurement_covariance_R, initial_R_diagonal_val);
+
+//    printf("measurement_covariance_R\n");
+//    print_matrix(measurement_covariance_R);
+//    printf("\n");
+
+    matrix * propagation_H = create_matrix(2, 4);
+//    fill_with_zeros(propagation_H);
+
+    matrix * residuals_e = create_matrix(2, 1);
+//    fill_with_zeros(residuals_e);
+
+    matrix * propagation_covariance_P_k = create_matrix(4, 4);
+//    fill_with_zeros(propagation_covariance_P_k);
+
+    matrix * propagation_covariance_P_k_minus_1 = create_matrix(4, 4);
+    fill_propagation_covariance_P(propagation_covariance_P_k_minus_1);
+
+    matrix * covariance_estimate_S = create_matrix(2, 2);
+//    fill_with_zeros(covariance_estimate_S);
+
+    matrix * kalman_gain_K = create_matrix(4, 2);
+//    fill_with_zeros(kalman_gain_K);
+
+    matrix * identity_I = create_matrix(4, 4);
+    fill_diagonal(identity_I, 1.0);
+
+    double time, A, B;
+    double time_incr = 1.0 / 2000.0;
+
+    static double plot_x_vals[ARRAY_SIZE];
+    static double plot_y_vals[ARRAY_SIZE];
+
+    double state_vector_theta_x, state_vector_theta_y;
+
+    double biggest_meas_val_x = 0.0;
+    double biggest_meas_val_y = 0.0;
+
+    double measurement_x, measurement_y;
+
+    initialise_propagation_H(propagation_H);
+
+    int counter = 0;
+    for (time = initial_t; time <= final_t; time = time + time_incr) {
+        measurement_x = data_meas_arr_x[counter];
+        measurement_y = data_meas_arr_y[counter];
+
+        measurement_m->array[0][0] = measurement_x;
+        measurement_m->array[1][0] = measurement_y;
+
+        update_propagation_H(propagation_H, time);
+
+        residuals_e = AddOrSubMatrix(measurement_m, MultMatrix(propagation_H, state_vector_theta_k_minus_1), 's');
+
+        covariance_estimate_S = AddOrSubMatrix(MultMatrix(MultMatrix(propagation_H, propagation_covariance_P_k_minus_1), transpose(propagation_H)), measurement_covariance_R, 'a');
+
+        kalman_gain_K = MultMatrix(MultMatrix(propagation_covariance_P_k_minus_1, transpose(propagation_H)), Invert(covariance_estimate_S));
+
+        state_vector_theta_k = AddOrSubMatrix(state_vector_theta_k_minus_1, MultMatrix(kalman_gain_K, residuals_e), 'a');
+
+        propagation_covariance_P_k = MultMatrix(AddOrSubMatrix(identity_I, MultMatrix(kalman_gain_K, propagation_H), 's'), propagation_covariance_P_k_minus_1);
+
+        state_vector_theta_x = state_vector_theta_k->array[0][0];
+        state_vector_theta_y = state_vector_theta_k->array[1][0];
+
+        measurement_x = data_meas_arr_x[counter];
+        measurement_y = data_meas_arr_y[counter];
+
+        plot_x_vals[counter] = measurement_x;
+        plot_y_vals[counter] = measurement_y;
+
+        if (measurement_x > biggest_meas_val_x) {
+            biggest_meas_val_x = measurement_x;
+        }
+
+        if (measurement_y > biggest_meas_val_y) {
+            biggest_meas_val_y = measurement_y;
+        }
+
+        state_vector_theta_k_minus_1 = state_vector_theta_k;
+        propagation_covariance_P_k_minus_1 = propagation_covariance_P_k;
+
+        counter++;
+    }
+
+    printf("propagation_covariance_P_k\n");
+    print_matrix(propagation_covariance_P_k);
+
+//    printf("Final value of time: %lf\n", time);
+//    printf("Value of data_size_x: %d\n", data_size_x);
+
+    double trace_val = trace(propagation_covariance_P_k);
+
+    printf("Trace value: %lf\n", trace_val);
+
+    //    if (cpgbeg(0, "?", 1, 1) != 1) {
+    if (cpgbeg(0, "/XWINDOW", 1, 1) != 1) {
+//    if (cpgbeg(0, "/media/sf_Comp/code/proj_4/proj_4_plot.ps/CPS", 1, 1) != 1) {
+//    if (cpgbeg(0, "proj_4_plot.ps/CPS", 1, 1) != 1) {
+//    if (cpgbeg(0, "/PS", 1, 1) != 1) {
+        exit(EXIT_FAILURE);
+    }
+    cpgask(1);
+
+    disp_plot(data_size_x, plot_x_vals, plot_y_vals, -0.5, add_percent(biggest_meas_val_x, 0.1), -1.0, add_percent(biggest_meas_val_y, 0.1), state_vector_theta_k, initial_t, "Heading", "X label", "Y label");
+
+    cpgend();
 }

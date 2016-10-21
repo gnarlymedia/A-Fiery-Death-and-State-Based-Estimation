@@ -6,4 +6,4 @@
 /gmon.out
 /prof_output*
 /pgplot*.log
-/matrices.c
+/matrices*.c
