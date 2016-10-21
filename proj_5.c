@@ -431,8 +431,10 @@ static void disp_plot(int num, double *x_vals, double *y_vals, double x_min, dou
 
     for (ellipse_counter = 0; ellipse_counter < num; ellipse_counter++) {
         w_t = w * calculate_time(initial_t, ellipse_counter);
-        f_ell_x_vals[ellipse_counter] = (float)(x_0 + A * cos(w_t));
-        f_ell_y_vals[ellipse_counter] = (float)(y_0 + B * sin(w_t));
+        float ell_x_val = (float) x_0 + A * cos(w_t);
+        float ell_y_val = (float) y_0 + B * sin(w_t);
+        f_ell_x_vals[ellipse_counter] = ell_x_val;
+        f_ell_y_vals[ellipse_counter] = ell_y_val;
     }
 
     cpgbbuf();
@@ -620,7 +622,7 @@ int main(void)
     }
     cpgask(1);
 
-    disp_plot(data_size_x, plot_x_vals, plot_y_vals, -0.5, add_percent(biggest_meas_val_x, 0.1), -1.0, add_percent(biggest_meas_val_y, 0.1), state_vector_theta_k, initial_t, "Heading", "X label", "Y label");
+    disp_plot(data_size_x, plot_x_vals, plot_y_vals, -0.5, add_percent(biggest_meas_val_x, 0.1), 1.0, add_percent(biggest_meas_val_y, 0.1), state_vector_theta_k, initial_t, "Heading", "X label", "Y label");
 
     cpgend();
 }
