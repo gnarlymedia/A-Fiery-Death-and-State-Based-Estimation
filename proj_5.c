@@ -6,13 +6,6 @@
 //#include <errno.h>
 #include "cpgplot.h"
 
-#ifndef EXIT_FAILURE
-#define EXIT_FAILURE 1
-#endif
-#ifndef EXIT_SUCCESS
-#define EXIT_SUCCESS 0
-#endif
-
 #define pi 3.1415926
 #define w 0.2625
 
@@ -24,6 +17,9 @@
 #define initial_B 2
 #define initial_P_diagonal_val 0.1
 #define initial_R_diagonal_val 0.0036
+
+#define initial_t_multiplier 2.0
+#define final_t_multiplier 3.0
 
 typedef struct _matrix matrix;
 
@@ -513,8 +509,8 @@ int main(void)
 {
     srand48((int) time(NULL));
 
-    double initial_t = pi * 2;
-    double final_t = pi * 3;
+    double initial_t = pi * initial_t_multiplier;
+    double final_t = pi * final_t_multiplier;
 
     double * data_meas_arr_x = NULL;
     double * data_meas_arr_y = NULL;
@@ -524,7 +520,7 @@ int main(void)
     readData(&data_meas_arr_x, &data_meas_arr_y, &data_size_x, &data_size_y);
 
     printf("First two measurements - x: %lf, y: %lf\n\n", data_meas_arr_x[0], data_meas_arr_y[0]);
-    
+
     // theta
     matrix * state_vector_theta_k = create_matrix(4, 1);
     matrix * state_vector_theta_k_minus_1 = create_matrix(4, 1);
@@ -635,20 +631,26 @@ int main(void)
 
     printf("Final trace value of P_k_minus_1: %.8lf\n\n", trace_P_val);
 
+    char plot_file_name[256];
+    snprintf(plot_file_name, sizeof(plot_file_name), "proj5plot-trP-%.0lf-%.0lf.ps/CPS", initial_t_multiplier, final_t_multiplier);
+
     //    if (cpgbeg(0, "?", 1, 1) != 1) {
-    if (cpgbeg(0, "/XWINDOW", 1, 1) != 1) {
-//    if (cpgbeg(0, "/media/sf_Comp/code/proj_4/proj_4_plot.ps/CPS", 1, 1) != 1) {
-//    if (cpgbeg(0, "proj_4_plot.ps/CPS", 1, 1) != 1) {
+//    if (cpgbeg(0, "/XWINDOW", 1, 1) != 1) {
+//    if (cpgbeg(0, "/media/sf_Comp/code/proj_5/proj_5_plot.ps/CPS", 1, 1) != 1) {
+    if (cpgbeg(0, plot_file_name, 1, 1) != 1) {
 //    if (cpgbeg(0, "/PS", 1, 1) != 1) {
         exit(EXIT_FAILURE);
     }
     cpgask(1);
 
 //    disp_plot_traj(counter, plot_x_vals, plot_y_vals, -0.5, add_fraction(biggest_meas_val_x, 0.1), 1.0,
-//                   add_fraction(biggest_meas_val_y, 0.1), state_vector_theta_k, initial_t, "Heading", "X label",
-//                   "Y label");
+//                   add_fraction(biggest_meas_val_y, 0.1), state_vector_theta_k, initial_t, "Heading", "Distance (units of 10,000,000 km)",
+//                   "Distance (units of 10,000,000 km)");
 
-    disp_plot_tr_P(counter, plot_tr_P_t_vals, plot_tr_P_vals, initial_t, add_fraction(biggest_meas_tr_P_time_val, 0.1), 0.0, add_fraction(biggest_meas_tr_P_val, 0.1), "Trace of propagation matrix P versus time", "Time", "Trace of P");
+    char plot_label[256];
+    snprintf(plot_label, sizeof(plot_label), "Trace of P versus time, for time: pi * %.1lf - pi * %.1lf (%.3lf - %.3lf to 3 dec. plc.)", initial_t_multiplier, final_t_multiplier, initial_t, final_t);
+
+    disp_plot_tr_P(counter, plot_tr_P_t_vals, plot_tr_P_vals, initial_t, add_fraction(biggest_meas_tr_P_time_val, 0.1), 0.0, add_fraction(biggest_meas_tr_P_val, 0.1), plot_label, "Time (years)", "Trace of propagation matrix P (x10 superscript-14 km superscript-squared)");
 
     cpgend();
 }
