@@ -21,6 +21,8 @@
 #define initial_t_multiplier 2.0
 #define final_t_multiplier 3.0
 
+#define dist_multiplier 10000000
+
 typedef struct _matrix matrix;
 
 struct _matrix
@@ -396,6 +398,10 @@ double calculate_time(double initial_t, int counter) {
     return initial_t + (counter * (1.0/2000.0));
 }
 
+double add_fraction(double val, double add) {
+    return val + (val * add);
+}
+
 static void disp_plot_traj(int num, double *x_vals, double *y_vals, double x_min, double x_max, double y_min,
                            double y_max, matrix *m, double initial_t, double time_incr, char *heading, char *x_label, char *y_label)
 {
@@ -427,15 +433,38 @@ static void disp_plot_traj(int num, double *x_vals, double *y_vals, double x_min
     double B = m->array[3][0];
     double w_t;
 
+    double planet_centre_x = -0.1;
+    double planet_centre_y = 1.3;
+    double planet_radius = 0.02;
+    double planet_smallest_x = planet_centre_x - (planet_radius / 2.0);
+    double planet_largest_x = planet_centre_x + (planet_radius / 2.0);
+    double planet_smallest_y = planet_centre_y - (planet_radius / 2.0);
+    double planet_largest_y = planet_centre_y + (planet_radius / 2.0);
+
     int ellipse_counter = 0;
     double t;
+    int impact = 0;
+    double impact_x, impact_y, impact_t;
+    double ell_x_val, ell_y_val;
     for (t = initial_t; t < (pi * 6.0); t = t + time_incr) {
         w_t = w * t;
-        float ell_x_val = (float) x_0 + A * cos(w_t);
-        float ell_y_val = (float) y_0 + B * sin(w_t);
-        f_ell_x_vals[ellipse_counter] = ell_x_val;
-        f_ell_y_vals[ellipse_counter] = ell_y_val;
-        ellipse_counter++;
+        ell_x_val = x_0 + A * cos(w_t);
+        ell_y_val = y_0 + B * sin(w_t);
+
+        if (ell_x_val > planet_largest_x && ell_y_val > planet_largest_y) {
+            // only plot if to the right and above planet
+            f_ell_x_vals[ellipse_counter] = (float) ell_x_val;
+            f_ell_y_vals[ellipse_counter] = (float) ell_y_val;
+            ellipse_counter++;
+        }
+
+        if (ell_x_val >= planet_smallest_x && ell_x_val <= planet_largest_x && ell_y_val >= planet_smallest_y && ell_y_val <= planet_largest_y) {
+            // impact
+            impact = 1;
+            impact_x = ell_x_val;
+            impact_y = ell_y_val;
+            impact_t = t;
+        }
     }
 
     cpgbbuf();
@@ -448,7 +477,7 @@ static void disp_plot_traj(int num, double *x_vals, double *y_vals, double x_min
 
     // target
     cpgsci(1);
-    cpgcirc((float)-0.1, 1.3, 0.02);
+    cpgcirc((float) planet_centre_x, planet_centre_y, planet_radius);
 
     // data points scatterplot
     cpgsci(1);
@@ -462,6 +491,14 @@ static void disp_plot_traj(int num, double *x_vals, double *y_vals, double x_min
     // ellipse
     cpgsci(3);
     cpgline(ellipse_counter, f_ell_x_vals, f_ell_y_vals);
+
+    if (impact == 1) {
+        // print label for impact point
+        char pt_label[256];
+        snprintf(pt_label, sizeof(pt_label), "Impact! at t=%.3lf yrs, x = %.2e km, y = %.2e km", impact_t, impact_x * dist_multiplier, impact_y * dist_multiplier);
+        cpgsci(6);
+        cpgtext((float) 0.0, (float) add_fraction(impact_y, 0.1), pt_label);
+    }
 
     cpgebuf();
 }
@@ -489,11 +526,7 @@ static void disp_plot_tr_P(int num, float *x_vals, float *y_vals, double x_min, 
     cpgebuf();
 }
 
-double add_fraction(double val, double add) {
-    return val + (val * add);
-}
-
-double trace(matrix * m) {
+static double trace(matrix * m) {
     int j, k;
     double ret_val = 0.0;
 
@@ -564,7 +597,7 @@ int main(void)
     matrix * identity_I = create_matrix(4, 4);
     fill_diagonal(identity_I, 1.0);
 
-    double time, A, B;
+    double t_k, A, B;
     double time_incr = 1.0 / 2000.0;
 
     static double plot_x_vals[ARRAY_SIZE];
@@ -572,7 +605,6 @@ int main(void)
 
     static float plot_tr_P_vals[ARRAY_SIZE];
     static float plot_tr_P_t_vals[ARRAY_SIZE];
-
 
     double biggest_meas_val_x = 0.0;
     double biggest_meas_val_y = 0.0;
@@ -587,14 +619,14 @@ int main(void)
     initialise_propagation_H(propagation_H);
 
     int counter = 0;
-    for (time = initial_t; time <= final_t; time = time + time_incr) {
+    for (t_k = initial_t; t_k <= final_t; t_k = t_k + time_incr) {
         measurement_x = data_meas_arr_x[counter];
         measurement_y = data_meas_arr_y[counter];
 
         measurement_m->array[0][0] = measurement_x;
         measurement_m->array[1][0] = measurement_y;
 
-        update_propagation_H(propagation_H, time);
+        update_propagation_H(propagation_H, t_k);
 
         residuals_e = AddOrSubMatrix(measurement_m, MultMatrix(propagation_H, state_vector_theta_k_minus_1), 's');
 
@@ -622,10 +654,10 @@ int main(void)
         trace_P_val = trace(propagation_covariance_P_k);
 
         plot_tr_P_vals[counter] = trace_P_val;
-        plot_tr_P_t_vals[counter] = time;
+        plot_tr_P_t_vals[counter] = t_k;
 
         findAndSetMax(trace_P_val, &biggest_meas_tr_P_val);
-        findAndSetMax(time, &biggest_meas_tr_P_time_val);
+        findAndSetMax(t_k, &biggest_meas_tr_P_time_val);
 
         state_vector_theta_k_minus_1 = state_vector_theta_k;
         propagation_covariance_P_k_minus_1 = propagation_covariance_P_k;
@@ -637,7 +669,7 @@ int main(void)
     print_matrix(propagation_covariance_P_k);
     printf("\n");
 
-//    printf("Final value of time: %lf\n", time);
+//    printf("Final value of t: %lf\n", t);
 //    printf("Value of data_size_x: %d\n", data_size_x);
 
     printf("Final trace value of P_k_minus_1: %.8lf\n\n", trace_P_val);
@@ -652,12 +684,10 @@ int main(void)
     }
     cpgask(1);
 
-    disp_plot_traj(counter, plot_x_vals, plot_y_vals, -0.5, add_fraction(biggest_meas_val_x, 0.1), 1.0,
-                   add_fraction(biggest_meas_val_y, 0.1), state_vector_theta_k, initial_t, time_incr, "Heading", "Distance (units of 10,000,000 km)",
-                   "Distance (units of 10,000,000 km)");
+    disp_plot_traj(counter, plot_x_vals, plot_y_vals, -0.5, add_fraction(biggest_meas_val_x, 0.1), 1.0, add_fraction(biggest_meas_val_y, 0.1), state_vector_theta_k, initial_t, time_incr, "Heading", "Distance (units of 10,000,000 km)", "Distance (units of 10,000,000 km)");
 
     char plot_label[256];
-    snprintf(plot_label, sizeof(plot_label), "Trace of P versus time, for time: pi * %.1lf - pi * %.1lf (%.3lf - %.3lf to 3 dec. plc.)", initial_t_multiplier, final_t_multiplier, initial_t, final_t);
+    snprintf(plot_label, sizeof(plot_label), "Trace of P versus t, for t: pi * %.1lf - pi * %.1lf (%.3lf - %.3lf to 3 dec. plc.)", initial_t_multiplier, final_t_multiplier, initial_t, final_t);
 
 //    disp_plot_tr_P(counter, plot_tr_P_t_vals, plot_tr_P_vals, initial_t, add_fraction(biggest_meas_tr_P_time_val, 0.1), 0.0, add_fraction(biggest_meas_tr_P_val, 0.1), plot_label, "Time (years)", "Trace of propagation matrix P (x10 superscript-14 km superscript-squared)");
 
