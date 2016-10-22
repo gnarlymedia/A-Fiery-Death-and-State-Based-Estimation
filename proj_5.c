@@ -50,7 +50,7 @@ double ** create_2d_arrayd(int rows, int cols)
 //
 // Destroy a 2D array of dimensions (rows,[]) of double in memory
 //
-void destroy_2d_arrayd( double *array[], int rows)
+static void destroy_2d_arrayd( double *array[], int rows)
 {
     int i=0;
     for(i=0;i<rows;i++)
@@ -83,7 +83,7 @@ matrix * create_matrix(int nrows, int ncols)
 //
 // destory a matrix
 //
-void destroy_matrix(matrix * me)
+static void destroy_matrix(matrix * me)
 {
     destroy_2d_arrayd( me->array, me->m_nrows);
     free(me);
@@ -92,7 +92,7 @@ void destroy_matrix(matrix * me)
 //
 // Transpose a matrix. Caller must destroy returned matrix;
 //
-matrix * transpose(matrix * me)
+matrix * Transpose(matrix *me)
 {
     matrix * trans = create_matrix(me->m_ncols,me->m_nrows);
     int i, j;
@@ -145,7 +145,7 @@ matrix * AddOrSubMatrix(matrix *me, matrix *other, char add_or_sub)
 // Multiply a matrix by a scalar
 // Matrix passed in is scaled.
 //
-void ScaleMatrix(matrix * me, double scale)
+static void ScaleMatrix(matrix * me, double scale)
 {
     int i,j;
     for(i=0; i < me->m_nrows;i++)
@@ -187,7 +187,7 @@ matrix * MultMatrix(matrix * left, matrix * right)
 //
 // Make a copy of a matrix. Caller must destroy the matrix
 //
-matrix * clone(matrix * me)
+matrix * Clone(matrix *me)
 {
     matrix * cme = create_matrix(me->m_nrows,me->m_ncols);
     int i,j;
@@ -201,14 +201,14 @@ matrix * clone(matrix * me)
     return cme;
 }
 
-void print_matrix(matrix * me)
+static void print_matrix(matrix * me)
 {
     int i,j;
     for(i= 0; i< me->m_nrows; i++)
     {
         for(j=0; j < me->m_ncols; j++)
         {
-            printf("%8.4lf ",me->array[i][j]);
+            printf("%.8lf ",me->array[i][j]);
         }
         printf("\n");
     }
@@ -226,7 +226,7 @@ matrix * Invert(matrix * me)
     matrix * inverse =  create_matrix(me->m_nrows,me->m_ncols);
     int i,j,k;
     int size = me->m_nrows;
-    matrix * cme = clone(me);
+    matrix * cme = Clone(me);
     double p = 0.0;
     double q = 0.0;
 
@@ -304,7 +304,7 @@ matrix * Invert(matrix * me)
 // returns the number of elements in xval and yval in the pointers
 // sizeX and sizeY
 //
-void readData(double ** xval, double ** yval, int * sizeX, int * sizeY)
+static void readData(double ** xval, double ** yval, int * sizeX, int * sizeY)
 {
     // use on compphys server
 //    FILE* fx_data = fopen("/home/shudson1/proj_5/x_data_p06.dat", "rb");
@@ -346,7 +346,7 @@ static void destroy_1d_array_d(double p1dArray[])
     free(p1dArray);
 }
 
-void fill_diagonal(matrix *m, double val) {
+static void fill_diagonal(matrix *m, double val) {
     int j, k;
 
     for (j = 0; j < (m->m_nrows); j = j + 1) {
@@ -360,7 +360,7 @@ void fill_diagonal(matrix *m, double val) {
     }
 }
 
-void fill_with_rand(matrix * ma, int nrows, int ncols) {
+static void fill_with_rand(matrix * ma, int nrows, int ncols) {
     int j, k;
 
     for (j = 0; j < (ma->m_nrows); j = j + 1) {
@@ -370,7 +370,7 @@ void fill_with_rand(matrix * ma, int nrows, int ncols) {
     }
 }
 
-void fill_with_zeros(matrix * m) {
+static void fill_with_zeros(matrix * m) {
     int j, k;
 
     for (j = 0; j < (m->m_nrows); j = j + 1) {
@@ -380,19 +380,19 @@ void fill_with_zeros(matrix * m) {
     }
 }
 
-void initialise_propagation_H(matrix *m) {
+static void initialise_propagation_H(matrix *m) {
     fill_with_zeros(m);
 
     m->array[0][0] = 1;
     m->array[1][1] = 1;
 }
 
-void update_propagation_H(matrix *m, double t) {
+static void update_propagation_H(matrix *m, double t) {
     m->array[0][2] = cos(w * t);
     m->array[1][3] = sin(w * t);
 }
 
-void fill_propagation_covariance_P(matrix *m) {
+static void fill_propagation_covariance_P(matrix *m) {
     fill_diagonal(m, initial_P_diagonal_val);
 }
 
@@ -400,7 +400,8 @@ double calculate_time(double initial_t, int counter) {
     return initial_t + (counter * (1.0/2000.0));
 }
 
-static void disp_plot(int num, double *x_vals, double *y_vals, double x_min, double x_max, double y_min, double y_max, matrix *m, double initial_t, char *heading, char *x_label, char *y_label)
+static void disp_plot_traj(int num, double *x_vals, double *y_vals, double x_min, double x_max, double y_min,
+                           double y_max, matrix *m, double initial_t, char *heading, char *x_label, char *y_label)
 {
     static float f_x_vals[ARRAY_SIZE];
     static float f_y_vals[ARRAY_SIZE];
@@ -460,7 +461,30 @@ static void disp_plot(int num, double *x_vals, double *y_vals, double x_min, dou
     cpgebuf();
 }
 
-double add_percent(double val, double add) {
+static void disp_plot_tr_P(int num, float *x_vals, float *y_vals, double x_min, double x_max, double y_min,
+                           double y_max, char *heading, char *x_label, char *y_label)
+{
+    float fxmin = (float) x_min;
+    float fxmax = (float) x_max;
+    float fymin = (float) y_min;
+    float fymax = (float) y_max;
+
+    cpgbbuf();
+
+    cpgsci(14);
+    cpgenv(fxmin, fxmax, fymin, fymax, 0, 1);
+
+    cpgsci(14);
+    cpglab(x_label, y_label, heading);
+
+    // ellipse
+    cpgsci(3);
+    cpgline(num, x_vals, y_vals);
+
+    cpgebuf();
+}
+
+double add_fraction(double val, double add) {
     return val + (val * add);
 }
 
@@ -479,6 +503,12 @@ double trace(matrix * m) {
     return ret_val;
 }
 
+static void findAndSetMax(double val, double * max_val) {
+    if (val > * max_val) {
+        * max_val = val;
+    }
+}
+
 int main(void)
 {
     srand48((int) time(NULL));
@@ -493,16 +523,8 @@ int main(void)
 
     readData(&data_meas_arr_x, &data_meas_arr_y, &data_size_x, &data_size_y);
 
-    printf("First two measurements - x: %lf, y: %lf\n", data_meas_arr_x[0], data_meas_arr_y[0]);
-
-    /*
-    int look_at_data_counter;
-
-    for (look_at_data_counter = 0; look_at_data_counter < 5; look_at_data_counter++) {
-        printf("data_meas_arr_x: %lf, data_meas_arr_y: %lf\n", data_meas_arr_x[look_at_data_counter], data_meas_arr_y[look_at_data_counter]);
-    }
-    */
-
+    printf("First two measurements - x: %lf, y: %lf\n\n", data_meas_arr_x[0], data_meas_arr_y[0]);
+    
     // theta
     matrix * state_vector_theta_k = create_matrix(4, 1);
     matrix * state_vector_theta_k_minus_1 = create_matrix(4, 1);
@@ -517,30 +539,20 @@ int main(void)
     fill_with_zeros(measurement_m);
 
     matrix * measurement_covariance_R = create_matrix(2, 2);
-
     fill_diagonal(measurement_covariance_R, initial_R_diagonal_val);
 
-//    printf("measurement_covariance_R\n");
-//    print_matrix(measurement_covariance_R);
-//    printf("\n");
-
     matrix * propagation_H = create_matrix(2, 4);
-//    fill_with_zeros(propagation_H);
 
     matrix * residuals_e = create_matrix(2, 1);
-//    fill_with_zeros(residuals_e);
 
     matrix * propagation_covariance_P_k = create_matrix(4, 4);
-//    fill_with_zeros(propagation_covariance_P_k);
 
     matrix * propagation_covariance_P_k_minus_1 = create_matrix(4, 4);
     fill_propagation_covariance_P(propagation_covariance_P_k_minus_1);
 
     matrix * covariance_estimate_S = create_matrix(2, 2);
-//    fill_with_zeros(covariance_estimate_S);
 
     matrix * kalman_gain_K = create_matrix(4, 2);
-//    fill_with_zeros(kalman_gain_K);
 
     matrix * identity_I = create_matrix(4, 4);
     fill_diagonal(identity_I, 1.0);
@@ -551,12 +563,19 @@ int main(void)
     static double plot_x_vals[ARRAY_SIZE];
     static double plot_y_vals[ARRAY_SIZE];
 
-    double state_vector_theta_x, state_vector_theta_y;
+    static float plot_tr_P_vals[ARRAY_SIZE];
+    static float plot_tr_P_t_vals[ARRAY_SIZE];
+
 
     double biggest_meas_val_x = 0.0;
     double biggest_meas_val_y = 0.0;
 
+    double biggest_meas_tr_P_val = 0.0;
+    double biggest_meas_tr_P_time_val = 0.0;
+
+    double state_vector_theta_x, state_vector_theta_y;
     double measurement_x, measurement_y;
+    double trace_P_val;
 
     initialise_propagation_H(propagation_H);
 
@@ -572,9 +591,10 @@ int main(void)
 
         residuals_e = AddOrSubMatrix(measurement_m, MultMatrix(propagation_H, state_vector_theta_k_minus_1), 's');
 
-        covariance_estimate_S = AddOrSubMatrix(MultMatrix(MultMatrix(propagation_H, propagation_covariance_P_k_minus_1), transpose(propagation_H)), measurement_covariance_R, 'a');
+        covariance_estimate_S = AddOrSubMatrix(MultMatrix(MultMatrix(propagation_H, propagation_covariance_P_k_minus_1),
+                                                          Transpose(propagation_H)), measurement_covariance_R, 'a');
 
-        kalman_gain_K = MultMatrix(MultMatrix(propagation_covariance_P_k_minus_1, transpose(propagation_H)), Invert(covariance_estimate_S));
+        kalman_gain_K = MultMatrix(MultMatrix(propagation_covariance_P_k_minus_1, Transpose(propagation_H)), Invert(covariance_estimate_S));
 
         state_vector_theta_k = AddOrSubMatrix(state_vector_theta_k_minus_1, MultMatrix(kalman_gain_K, residuals_e), 'a');
 
@@ -589,13 +609,16 @@ int main(void)
         plot_x_vals[counter] = measurement_x;
         plot_y_vals[counter] = measurement_y;
 
-        if (measurement_x > biggest_meas_val_x) {
-            biggest_meas_val_x = measurement_x;
-        }
+        findAndSetMax(measurement_x, &biggest_meas_val_x);
+        findAndSetMax(measurement_y, &biggest_meas_val_y);
 
-        if (measurement_y > biggest_meas_val_y) {
-            biggest_meas_val_y = measurement_y;
-        }
+        trace_P_val = trace(propagation_covariance_P_k);
+
+        plot_tr_P_vals[counter] = trace_P_val;
+        plot_tr_P_t_vals[counter] = time;
+
+        findAndSetMax(trace_P_val, &biggest_meas_tr_P_val);
+        findAndSetMax(time, &biggest_meas_tr_P_time_val);
 
         state_vector_theta_k_minus_1 = state_vector_theta_k;
         propagation_covariance_P_k_minus_1 = propagation_covariance_P_k;
@@ -603,15 +626,14 @@ int main(void)
         counter++;
     }
 
-    printf("propagation_covariance_P_k\n");
+    printf("Final value of propagation_covariance_P_k\n");
     print_matrix(propagation_covariance_P_k);
+    printf("\n");
 
 //    printf("Final value of time: %lf\n", time);
 //    printf("Value of data_size_x: %d\n", data_size_x);
 
-    double trace_val = trace(propagation_covariance_P_k);
-
-    printf("Trace value: %lf\n", trace_val);
+    printf("Final trace value of P_k_minus_1: %.8lf\n\n", trace_P_val);
 
     //    if (cpgbeg(0, "?", 1, 1) != 1) {
     if (cpgbeg(0, "/XWINDOW", 1, 1) != 1) {
@@ -622,7 +644,11 @@ int main(void)
     }
     cpgask(1);
 
-    disp_plot(data_size_x, plot_x_vals, plot_y_vals, -0.5, add_percent(biggest_meas_val_x, 0.1), 1.0, add_percent(biggest_meas_val_y, 0.1), state_vector_theta_k, initial_t, "Heading", "X label", "Y label");
+//    disp_plot_traj(counter, plot_x_vals, plot_y_vals, -0.5, add_fraction(biggest_meas_val_x, 0.1), 1.0,
+//                   add_fraction(biggest_meas_val_y, 0.1), state_vector_theta_k, initial_t, "Heading", "X label",
+//                   "Y label");
+
+    disp_plot_tr_P(counter, plot_tr_P_t_vals, plot_tr_P_vals, initial_t, add_fraction(biggest_meas_tr_P_time_val, 0.1), 0.0, add_fraction(biggest_meas_tr_P_val, 0.1), "Trace of propagation matrix P versus time", "Time", "Trace of P");
 
     cpgend();
 }
