@@ -16,7 +16,7 @@
 #define initial_A 2
 #define initial_B 2
 #define initial_P_diagonal_val 0.1
-#define initial_R_diagonal_val 0.0036
+#define R_diagonal_std_dev 0.06
 
 #define initial_t_multiplier 2.0
 #define final_t_multiplier 3.0
@@ -397,10 +397,11 @@ double calculate_time(double initial_t, int counter) {
 }
 
 static void disp_plot_traj(int num, double *x_vals, double *y_vals, double x_min, double x_max, double y_min,
-                           double y_max, matrix *m, double initial_t, char *heading, char *x_label, char *y_label)
+                           double y_max, matrix *m, double initial_t, double time_incr, char *heading, char *x_label, char *y_label)
 {
     static float f_x_vals[ARRAY_SIZE];
     static float f_y_vals[ARRAY_SIZE];
+    static float f_err_vals[ARRAY_SIZE];
 
     int i;
 
@@ -408,6 +409,7 @@ static void disp_plot_traj(int num, double *x_vals, double *y_vals, double x_min
     {
         f_x_vals[i] = (float) x_vals[i];
         f_y_vals[i] = (float) y_vals[i];
+        f_err_vals[i] = (float) R_diagonal_std_dev;
     }
 
     float fxmin, fxmax, fymin, fymax;
@@ -417,7 +419,6 @@ static void disp_plot_traj(int num, double *x_vals, double *y_vals, double x_min
     fymax = (float) y_max;
 
     // set up ellipse
-    int ellipse_counter;
     static float f_ell_x_vals[ARRAY_SIZE];
     static float f_ell_y_vals[ARRAY_SIZE];
     double x_0 = m->array[0][0];
@@ -426,12 +427,15 @@ static void disp_plot_traj(int num, double *x_vals, double *y_vals, double x_min
     double B = m->array[3][0];
     double w_t;
 
-    for (ellipse_counter = 0; ellipse_counter < num; ellipse_counter++) {
-        w_t = w * calculate_time(initial_t, ellipse_counter);
+    int ellipse_counter = 0;
+    double t;
+    for (t = initial_t; t < (pi * 6.0); t = t + time_incr) {
+        w_t = w * t;
         float ell_x_val = (float) x_0 + A * cos(w_t);
         float ell_y_val = (float) y_0 + B * sin(w_t);
         f_ell_x_vals[ellipse_counter] = ell_x_val;
         f_ell_y_vals[ellipse_counter] = ell_y_val;
+        ellipse_counter++;
     }
 
     cpgbbuf();
@@ -450,9 +454,14 @@ static void disp_plot_traj(int num, double *x_vals, double *y_vals, double x_min
     cpgsci(1);
     cpgpt(num, f_x_vals, f_y_vals, -1);
 
+    // error bars on data points
+    cpgsci(15);
+    cpgerrb(5, num, f_x_vals, f_y_vals, f_err_vals, 1.0);
+    cpgerrb(6, num, f_x_vals, f_y_vals, f_err_vals, 1.0);
+
     // ellipse
     cpgsci(3);
-    cpgline(num, f_ell_x_vals, f_ell_y_vals);
+    cpgline(ellipse_counter, f_ell_x_vals, f_ell_y_vals);
 
     cpgebuf();
 }
@@ -512,6 +521,8 @@ int main(void)
     double initial_t = pi * initial_t_multiplier;
     double final_t = pi * final_t_multiplier;
 
+    double R_diagonal_variance_val  = pow(R_diagonal_std_dev, 2.0);
+
     double * data_meas_arr_x = NULL;
     double * data_meas_arr_y = NULL;
     int data_size_x = 0;
@@ -535,7 +546,7 @@ int main(void)
     fill_with_zeros(measurement_m);
 
     matrix * measurement_covariance_R = create_matrix(2, 2);
-    fill_diagonal(measurement_covariance_R, initial_R_diagonal_val);
+    fill_diagonal(measurement_covariance_R, R_diagonal_variance_val);
 
     matrix * propagation_H = create_matrix(2, 4);
 
@@ -635,22 +646,20 @@ int main(void)
     snprintf(plot_file_name, sizeof(plot_file_name), "proj5plot-trP-%.0lf-%.0lf.ps/CPS", initial_t_multiplier, final_t_multiplier);
 
     //    if (cpgbeg(0, "?", 1, 1) != 1) {
-//    if (cpgbeg(0, "/XWINDOW", 1, 1) != 1) {
-//    if (cpgbeg(0, "/media/sf_Comp/code/proj_5/proj_5_plot.ps/CPS", 1, 1) != 1) {
-    if (cpgbeg(0, plot_file_name, 1, 1) != 1) {
-//    if (cpgbeg(0, "/PS", 1, 1) != 1) {
+    if (cpgbeg(0, "/XWINDOW", 1, 1) != 1) {
+//    if (cpgbeg(0, plot_file_name, 1, 1) != 1) {
         exit(EXIT_FAILURE);
     }
     cpgask(1);
 
-//    disp_plot_traj(counter, plot_x_vals, plot_y_vals, -0.5, add_fraction(biggest_meas_val_x, 0.1), 1.0,
-//                   add_fraction(biggest_meas_val_y, 0.1), state_vector_theta_k, initial_t, "Heading", "Distance (units of 10,000,000 km)",
-//                   "Distance (units of 10,000,000 km)");
+    disp_plot_traj(counter, plot_x_vals, plot_y_vals, -0.5, add_fraction(biggest_meas_val_x, 0.1), 1.0,
+                   add_fraction(biggest_meas_val_y, 0.1), state_vector_theta_k, initial_t, time_incr, "Heading", "Distance (units of 10,000,000 km)",
+                   "Distance (units of 10,000,000 km)");
 
     char plot_label[256];
     snprintf(plot_label, sizeof(plot_label), "Trace of P versus time, for time: pi * %.1lf - pi * %.1lf (%.3lf - %.3lf to 3 dec. plc.)", initial_t_multiplier, final_t_multiplier, initial_t, final_t);
 
-    disp_plot_tr_P(counter, plot_tr_P_t_vals, plot_tr_P_vals, initial_t, add_fraction(biggest_meas_tr_P_time_val, 0.1), 0.0, add_fraction(biggest_meas_tr_P_val, 0.1), plot_label, "Time (years)", "Trace of propagation matrix P (x10 superscript-14 km superscript-squared)");
+//    disp_plot_tr_P(counter, plot_tr_P_t_vals, plot_tr_P_vals, initial_t, add_fraction(biggest_meas_tr_P_time_val, 0.1), 0.0, add_fraction(biggest_meas_tr_P_val, 0.1), plot_label, "Time (years)", "Trace of propagation matrix P (x10 superscript-14 km superscript-squared)");
 
     cpgend();
 }
