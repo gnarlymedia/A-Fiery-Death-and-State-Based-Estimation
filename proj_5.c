@@ -250,12 +250,15 @@ matrix * Invert(matrix * me)
     for(i=0;i<size;i++)
     {
         p = cme->array[i][i];
-//        if(fabs(p) < 1.0e-100)
-//        {
-//            destroy_matrix(inverse);
-//            destroy_matrix(cme);
-//            return NULL;
-//        }
+
+        // if any values are very small, return NULL
+        if(fabs(p) < 1.0e-100)
+        {
+            destroy_matrix(inverse);
+            destroy_matrix(cme);
+            return NULL;
+        }
+
         for(j=i;j< size;j++)
         {
             if(j == i)
@@ -390,7 +393,7 @@ static void update_propagation_H(matrix *m, double t) {
     m->array[1][3] = sin(w * t);
 }
 
-static void fill_propagation_covariance_P(matrix *m) {
+static void fill_estimate_covariance_P(matrix *m) {
     fill_diagonal(m, initial_P_diagonal_val);
 }
 
@@ -398,12 +401,16 @@ double calculate_time(double initial_t, int counter) {
     return initial_t + (counter * (1.0/2000.0));
 }
 
-double add_fraction(double val, double add) {
-    return val + (val * add);
+double add_fraction(double val, double add, char add_sub) {
+    if (add_sub == 'a') {
+        return val + (val * add);
+    } else {
+        return val - (val * add);
+    }
 }
 
 static void disp_plot_traj(int num, double *x_vals, double *y_vals, double x_min, double x_max, double y_min,
-                           double y_max, matrix *m, double initial_t, double time_incr, char *heading, char *x_label, char *y_label)
+                           double y_max, matrix * m_theta, matrix * m_P, double initial_t, double time_incr, char *heading, char *x_label, char *y_label)
 {
     static float f_x_vals[ARRAY_SIZE];
     static float f_y_vals[ARRAY_SIZE];
@@ -427,11 +434,30 @@ static void disp_plot_traj(int num, double *x_vals, double *y_vals, double x_min
     // set up ellipse
     static float f_ell_x_vals[ARRAY_SIZE];
     static float f_ell_y_vals[ARRAY_SIZE];
-    double x_0 = m->array[0][0];
-    double y_0 = m->array[1][0];
-    double A = m->array[2][0];
-    double B = m->array[3][0];
+    double x_0 = m_theta->array[0][0];
+    double y_0 = m_theta->array[1][0];
+    double A = m_theta->array[2][0];
+    double B = m_theta->array[3][0];
     double w_t;
+
+    static float f_ell_x_vals_smallest[ARRAY_SIZE];
+    static float f_ell_y_vals_smallest[ARRAY_SIZE];
+    double x_0_smallest = x_0 - sqrt(m_P->array[0][0]);
+    double y_0_smallest = x_0 - sqrt(m_P->array[1][1]);
+    double A_smallest = x_0 - sqrt(m_P->array[2][2]);
+    double B_smallest = x_0 - sqrt(m_P->array[3][3]);
+
+    static float f_ell_x_vals_biggest[ARRAY_SIZE];
+    static float f_ell_y_vals_biggest[ARRAY_SIZE];
+    double x_0_biggest = x_0 + sqrt(m_P->array[0][0]);
+    double y_0_biggest = x_0 + sqrt(m_P->array[1][1]);
+    double A_biggest = x_0 + sqrt(m_P->array[2][2]);
+    double B_biggest = x_0 + sqrt(m_P->array[3][3]);
+
+    static float f_ell_centre_x_val[1];
+    f_ell_centre_x_val[0] = x_0;
+    static float f_ell_centre_y_val[1];
+    f_ell_centre_y_val[0] = y_0;
 
     double planet_centre_x = -0.1;
     double planet_centre_y = 1.3;
@@ -444,8 +470,13 @@ static void disp_plot_traj(int num, double *x_vals, double *y_vals, double x_min
     int ellipse_counter = 0;
     double t;
     int impact = 0;
+    int impact_sm = 0;
+    int impact_lg = 0;
     double impact_x, impact_y, impact_t;
+    double impact_x_sm, impact_y_sm, impact_t_sm;
+    double impact_x_lg, impact_y_lg, impact_t_lg;
     double ell_x_val, ell_y_val;
+
     for (t = initial_t; t < (pi * 6.0); t = t + time_incr) {
         w_t = w * t;
         ell_x_val = x_0 + A * cos(w_t);
@@ -464,6 +495,50 @@ static void disp_plot_traj(int num, double *x_vals, double *y_vals, double x_min
             impact_x = ell_x_val;
             impact_y = ell_y_val;
             impact_t = t;
+        }
+    }
+
+    int ellipse_counter_sm = 0;
+    for (t = initial_t; t < (pi * 6.0); t = t + time_incr) {
+        w_t = w * t;
+        ell_x_val = x_0_smallest + A_smallest * cos(w_t);
+        ell_y_val = y_0_smallest + B_smallest * sin(w_t);
+
+        if (ell_x_val > planet_largest_x && ell_y_val > planet_largest_y) {
+            // only plot if to the right and above planet
+            f_ell_x_vals_smallest[ellipse_counter_sm] = (float) ell_x_val;
+            f_ell_y_vals_smallest[ellipse_counter_sm] = (float) ell_y_val;
+            ellipse_counter_sm++;
+        }
+
+        if (ell_x_val >= planet_smallest_x && ell_x_val <= planet_largest_x && ell_y_val >= planet_smallest_y && ell_y_val <= planet_largest_y) {
+            // impact
+            impact_sm = 1;
+            impact_x_sm = ell_x_val;
+            impact_y_sm = ell_y_val;
+            impact_t_sm = t;
+        }
+    }
+
+    int ellipse_counter_lg = 0;
+    for (t = initial_t; t < (pi * 6.0); t = t + time_incr) {
+        w_t = w * t;
+        ell_x_val = x_0_biggest + A_biggest * cos(w_t);
+        ell_y_val = y_0_biggest + B_biggest * sin(w_t);
+
+        if (ell_x_val > planet_largest_x && ell_y_val > planet_largest_y) {
+            // only plot if to the right and above planet
+            f_ell_x_vals_biggest[ellipse_counter_lg] = (float) ell_x_val;
+            f_ell_y_vals_biggest[ellipse_counter_lg] = (float) ell_y_val;
+            ellipse_counter_lg++;
+        }
+
+        if (ell_x_val >= planet_smallest_x && ell_x_val <= planet_largest_x && ell_y_val >= planet_smallest_y && ell_y_val <= planet_largest_y) {
+            // impact
+            impact_lg = 1;
+            impact_x_lg = ell_x_val;
+            impact_y_lg = ell_y_val;
+            impact_t_lg = t;
         }
     }
 
@@ -488,16 +563,49 @@ static void disp_plot_traj(int num, double *x_vals, double *y_vals, double x_min
     cpgerrb(5, num, f_x_vals, f_y_vals, f_err_vals, 1.0);
     cpgerrb(6, num, f_x_vals, f_y_vals, f_err_vals, 1.0);
 
-    // ellipse
+    // ellipse normal
     cpgsci(3);
     cpgline(ellipse_counter, f_ell_x_vals, f_ell_y_vals);
+
+    // ellipse centre
+    cpgsci(3);
+    cpgpt(1, f_ell_centre_x_val, f_ell_centre_y_val, 2);
+
+    // ellipse smallest
+    cpgsci(4);
+    cpgline(ellipse_counter_sm, f_ell_x_vals_smallest, f_ell_y_vals_smallest);
+
+    // ellipse largest
+    cpgsci(5);
+    cpgline(ellipse_counter_lg, f_ell_x_vals_biggest, f_ell_y_vals_biggest);
+
+    char centre_pt_label[256];
+    snprintf(centre_pt_label, sizeof(centre_pt_label), "Ellipse centre at x = %.3e km, y = %.3e km", x_0, y_0);
+    cpgsci(6);
+    cpgtext((float) add_fraction(x_0, 0.9, 's'), (float) add_fraction(y_0, 0.06, 'a'), centre_pt_label);
 
     if (impact == 1) {
         // print label for impact point
         char pt_label[256];
-        snprintf(pt_label, sizeof(pt_label), "Impact! at t=%.3lf yrs, x = %.2e km, y = %.2e km", impact_t, impact_x * dist_multiplier, impact_y * dist_multiplier);
+        snprintf(pt_label, sizeof(pt_label), "Impact! at t = %.3lf yrs, x = %.2e km, y = %.2e km", impact_t, impact_x * dist_multiplier, impact_y * dist_multiplier);
         cpgsci(6);
-        cpgtext((float) 0.0, (float) add_fraction(impact_y, 0.1), pt_label);
+        cpgtext((float) 0.0, (float) add_fraction(impact_y, 0.1, 'a'), pt_label);
+    }
+
+    if (impact_sm == 1) {
+        // print label for impact point
+        char pt_label[256];
+        snprintf(pt_label, sizeof(pt_label), "Impact! at t = %.3lf yrs, x = %.2e km, y = %.2e km", impact_t_sm, impact_x_sm * dist_multiplier, impact_y_sm * dist_multiplier);
+        cpgsci(7);
+        cpgtext((float) 0.0, (float) add_fraction(impact_y_sm, 0.1, 's'), pt_label);
+    }
+
+    if (impact_lg == 1) {
+        // print label for impact point
+        char pt_label[256];
+        snprintf(pt_label, sizeof(pt_label), "Impact! at t = %.3lf yrs, x = %.2e km, y = %.2e km", impact_t_lg, impact_x_lg * dist_multiplier, impact_y_lg * dist_multiplier);
+        cpgsci(8);
+        cpgtext((float) 0.0, (float) add_fraction(impact_y_lg, 0.2, 'a'), pt_label);
     }
 
     cpgebuf();
@@ -563,7 +671,7 @@ int main(void)
 
     readData(&data_meas_arr_x, &data_meas_arr_y, &data_size_x, &data_size_y);
 
-    printf("First two measurements - x: %lf, y: %lf\n\n", data_meas_arr_x[0], data_meas_arr_y[0]);
+//    printf("First two measurements - x: %lf, y: %lf\n\n", data_meas_arr_x[0], data_meas_arr_y[0]);
 
     // theta
     matrix * state_vector_theta_k = create_matrix(4, 1);
@@ -573,7 +681,9 @@ int main(void)
     state_vector_theta_k_minus_1->array[2][0] = initial_A;
     state_vector_theta_k_minus_1->array[3][0] = initial_B;
 
-//    print_matrix(state_vector_theta_k_minus_1);
+    printf("Initial value of state_vector_theta_k_minus_1\n");
+    print_matrix(state_vector_theta_k_minus_1);
+    printf("\n\n");
 
     matrix * measurement_m = create_matrix(2, 1);
     fill_with_zeros(measurement_m);
@@ -585,12 +695,12 @@ int main(void)
 
     matrix * residuals_e = create_matrix(2, 1);
 
-    matrix * propagation_covariance_P_k = create_matrix(4, 4);
+    matrix * estimate_covariance_P_k = create_matrix(4, 4);
 
-    matrix * propagation_covariance_P_k_minus_1 = create_matrix(4, 4);
-    fill_propagation_covariance_P(propagation_covariance_P_k_minus_1);
+    matrix * estimate_covariance_P_k_minus_1 = create_matrix(4, 4);
+    fill_estimate_covariance_P(estimate_covariance_P_k_minus_1);
 
-    matrix * covariance_estimate_S = create_matrix(2, 2);
+    matrix * covariance_in_residuals_S = create_matrix(2, 2);
 
     matrix * kalman_gain_K = create_matrix(4, 2);
 
@@ -630,14 +740,20 @@ int main(void)
 
         residuals_e = AddOrSubMatrix(measurement_m, MultMatrix(propagation_H, state_vector_theta_k_minus_1), 's');
 
-        covariance_estimate_S = AddOrSubMatrix(MultMatrix(MultMatrix(propagation_H, propagation_covariance_P_k_minus_1),
+        covariance_in_residuals_S = AddOrSubMatrix(MultMatrix(MultMatrix(propagation_H, estimate_covariance_P_k_minus_1),
                                                           Transpose(propagation_H)), measurement_covariance_R, 'a');
 
-        kalman_gain_K = MultMatrix(MultMatrix(propagation_covariance_P_k_minus_1, Transpose(propagation_H)), Invert(covariance_estimate_S));
+        kalman_gain_K = MultMatrix(MultMatrix(estimate_covariance_P_k_minus_1, Transpose(propagation_H)), Invert(covariance_in_residuals_S));
+
+//        if (t_k == initial_t) {
+//            printf("residuals_e\n");
+//            print_matrix(residuals_e);
+//            printf("\n");
+//        }
 
         state_vector_theta_k = AddOrSubMatrix(state_vector_theta_k_minus_1, MultMatrix(kalman_gain_K, residuals_e), 'a');
 
-        propagation_covariance_P_k = MultMatrix(AddOrSubMatrix(identity_I, MultMatrix(kalman_gain_K, propagation_H), 's'), propagation_covariance_P_k_minus_1);
+        estimate_covariance_P_k = MultMatrix(AddOrSubMatrix(identity_I, MultMatrix(kalman_gain_K, propagation_H), 's'), estimate_covariance_P_k_minus_1);
 
         state_vector_theta_x = state_vector_theta_k->array[0][0];
         state_vector_theta_y = state_vector_theta_k->array[1][0];
@@ -651,7 +767,7 @@ int main(void)
         findAndSetMax(measurement_x, &biggest_meas_val_x);
         findAndSetMax(measurement_y, &biggest_meas_val_y);
 
-        trace_P_val = trace(propagation_covariance_P_k);
+        trace_P_val = trace(estimate_covariance_P_k);
 
         plot_tr_P_vals[counter] = trace_P_val;
         plot_tr_P_t_vals[counter] = t_k;
@@ -660,13 +776,16 @@ int main(void)
         findAndSetMax(t_k, &biggest_meas_tr_P_time_val);
 
         state_vector_theta_k_minus_1 = state_vector_theta_k;
-        propagation_covariance_P_k_minus_1 = propagation_covariance_P_k;
+        estimate_covariance_P_k_minus_1 = estimate_covariance_P_k;
 
         counter++;
     }
 
-    printf("Final value of propagation_covariance_P_k\n");
-    print_matrix(propagation_covariance_P_k);
+    printf("Initial value of estimate_covariance_P_k diagonal: %lf\n", initial_P_diagonal_val);
+    printf("Initial value of measurement_covariance_R diagonal: %lf\n\n", R_diagonal_variance_val);
+
+    printf("Final value of estimate_covariance_P_k\n");
+    print_matrix(estimate_covariance_P_k);
     printf("\n");
 
 //    printf("Final value of t: %lf\n", t);
@@ -674,22 +793,26 @@ int main(void)
 
     printf("Final trace value of P_k_minus_1: %.8lf\n\n", trace_P_val);
 
+//    printf("Final value of state_vector_theta_k\n");
+//    print_matrix(state_vector_theta_k);
+//    printf("\n");
+
     char plot_file_name[256];
     snprintf(plot_file_name, sizeof(plot_file_name), "proj5plot-trP-%.0lf-%.0lf.ps/CPS", initial_t_multiplier, final_t_multiplier);
 
     //    if (cpgbeg(0, "?", 1, 1) != 1) {
     if (cpgbeg(0, "/XWINDOW", 1, 1) != 1) {
-//    if (cpgbeg(0, plot_file_name, 1, 1) != 1) {
+//    if (cpgbeg(0, "proj5plot.ps/CPS", 1, 1) != 1) {
         exit(EXIT_FAILURE);
     }
     cpgask(1);
 
-    disp_plot_traj(counter, plot_x_vals, plot_y_vals, -0.5, add_fraction(biggest_meas_val_x, 0.1), 1.0, add_fraction(biggest_meas_val_y, 0.1), state_vector_theta_k, initial_t, time_incr, "Heading", "Distance (units of 10,000,000 km)", "Distance (units of 10,000,000 km)");
+    disp_plot_traj(counter, plot_x_vals, plot_y_vals, -0.5, add_fraction(biggest_meas_val_x, 0.1, 'a'), 1.0, add_fraction(biggest_meas_val_y, 0.1, 'a'), state_vector_theta_k, estimate_covariance_P_k, initial_t, time_incr, "Plot of the trajectory of the asteroid", "Distance (units of 10,000,000 km)", "Distance (units of 10,000,000 km)");
 
     char plot_label[256];
     snprintf(plot_label, sizeof(plot_label), "Trace of P versus t, for t: pi * %.1lf - pi * %.1lf (%.3lf - %.3lf to 3 dec. plc.)", initial_t_multiplier, final_t_multiplier, initial_t, final_t);
 
-//    disp_plot_tr_P(counter, plot_tr_P_t_vals, plot_tr_P_vals, initial_t, add_fraction(biggest_meas_tr_P_time_val, 0.1), 0.0, add_fraction(biggest_meas_tr_P_val, 0.1), plot_label, "Time (years)", "Trace of propagation matrix P (x10 superscript-14 km superscript-squared)");
+    disp_plot_tr_P(counter, plot_tr_P_t_vals, plot_tr_P_vals, initial_t, add_fraction(biggest_meas_tr_P_time_val, 0.1, 'a'), 0.0, add_fraction(biggest_meas_tr_P_val, 0.1, 'a'), plot_label, "Time (years)", "Trace of propagation matrix P (x10E14 km squared)");
 
     cpgend();
 }
