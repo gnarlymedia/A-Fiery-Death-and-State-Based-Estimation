@@ -16,7 +16,7 @@
 #define initial_A 2
 #define initial_B 2
 #define initial_P_diagonal_val 0.1
-#define R_diagonal_std_dev 0.06
+#define R_diagonal_std_dev 0.006
 
 #define initial_t_multiplier 2.0
 #define final_t_multiplier 3.0
@@ -443,16 +443,16 @@ static void disp_plot_traj(int num, double *x_vals, double *y_vals, double x_min
     static float f_ell_x_vals_smallest[ARRAY_SIZE];
     static float f_ell_y_vals_smallest[ARRAY_SIZE];
     double x_0_smallest = x_0 - sqrt(m_P->array[0][0]);
-    double y_0_smallest = x_0 - sqrt(m_P->array[1][1]);
-    double A_smallest = x_0 - sqrt(m_P->array[2][2]);
-    double B_smallest = x_0 - sqrt(m_P->array[3][3]);
+    double y_0_smallest = y_0 - sqrt(m_P->array[1][1]);
+    double A_smallest = A - sqrt(m_P->array[2][2]);
+    double B_smallest = B - sqrt(m_P->array[3][3]);
 
     static float f_ell_x_vals_biggest[ARRAY_SIZE];
     static float f_ell_y_vals_biggest[ARRAY_SIZE];
     double x_0_biggest = x_0 + sqrt(m_P->array[0][0]);
-    double y_0_biggest = x_0 + sqrt(m_P->array[1][1]);
-    double A_biggest = x_0 + sqrt(m_P->array[2][2]);
-    double B_biggest = x_0 + sqrt(m_P->array[3][3]);
+    double y_0_biggest = y_0 + sqrt(m_P->array[1][1]);
+    double A_biggest = A + sqrt(m_P->array[2][2]);
+    double B_biggest = B + sqrt(m_P->array[3][3]);
 
     static float f_ell_centre_x_val[1];
     f_ell_centre_x_val[0] = x_0;
@@ -501,8 +501,8 @@ static void disp_plot_traj(int num, double *x_vals, double *y_vals, double x_min
     int ellipse_counter_sm = 0;
     for (t = initial_t; t < (pi * 6.0); t = t + time_incr) {
         w_t = w * t;
-        ell_x_val = x_0_smallest + A_smallest * cos(w_t);
-        ell_y_val = y_0_smallest + B_smallest * sin(w_t);
+        ell_x_val = x_0_smallest + A_biggest * cos(w_t);
+        ell_y_val = y_0_biggest + B_biggest * sin(w_t);
 
         if (ell_x_val > planet_largest_x && ell_y_val > planet_largest_y) {
             // only plot if to the right and above planet
@@ -523,8 +523,8 @@ static void disp_plot_traj(int num, double *x_vals, double *y_vals, double x_min
     int ellipse_counter_lg = 0;
     for (t = initial_t; t < (pi * 6.0); t = t + time_incr) {
         w_t = w * t;
-        ell_x_val = x_0_biggest + A_biggest * cos(w_t);
-        ell_y_val = y_0_biggest + B_biggest * sin(w_t);
+        ell_x_val = x_0_biggest + A_smallest * cos(w_t);
+        ell_y_val = y_0_smallest + B_smallest * sin(w_t);
 
         if (ell_x_val > planet_largest_x && ell_y_val > planet_largest_y) {
             // only plot if to the right and above planet
@@ -541,6 +541,15 @@ static void disp_plot_traj(int num, double *x_vals, double *y_vals, double x_min
             impact_t_lg = t;
         }
     }
+
+    printf("x_0_smallest: %lf\n", x_0_smallest);
+    printf("x_0_biggest: %lf\n", x_0_biggest);
+    printf("y_0_smallest: %lf\n", y_0_smallest);
+    printf("y_0_biggest: %lf\n", y_0_biggest);
+    printf("A_smallest: %lf\n", A_smallest);
+    printf("A_biggest: %lf\n", A_biggest);
+    printf("B_smallest: %lf\n", B_smallest);
+    printf("B_biggest: %lf\n", B_biggest);
 
     cpgbbuf();
 
@@ -563,50 +572,56 @@ static void disp_plot_traj(int num, double *x_vals, double *y_vals, double x_min
     cpgerrb(5, num, f_x_vals, f_y_vals, f_err_vals, 1.0);
     cpgerrb(6, num, f_x_vals, f_y_vals, f_err_vals, 1.0);
 
+    int colour_mean = 3;
+    int colour_sm = 6;
+    int colour_lg = 8;
+
     // ellipse normal
     cpgsci(3);
     cpgline(ellipse_counter, f_ell_x_vals, f_ell_y_vals);
 
-    // ellipse centre
-    cpgsci(3);
+    // ellipse mean
+    cpgsci(colour_mean);
     cpgpt(1, f_ell_centre_x_val, f_ell_centre_y_val, 2);
 
     // ellipse smallest
-    cpgsci(4);
+    cpgsci(colour_sm);
     cpgline(ellipse_counter_sm, f_ell_x_vals_smallest, f_ell_y_vals_smallest);
 
     // ellipse largest
-    cpgsci(5);
+    cpgsci(colour_lg);
     cpgline(ellipse_counter_lg, f_ell_x_vals_biggest, f_ell_y_vals_biggest);
 
     char centre_pt_label[256];
-    snprintf(centre_pt_label, sizeof(centre_pt_label), "Ellipse centre at x = %.3e km, y = %.3e km", x_0, y_0);
+    snprintf(centre_pt_label, sizeof(centre_pt_label), "Mean ellipse centre at x = %.3e km, y = %.3e km", x_0, y_0);
     cpgsci(6);
     cpgtext((float) add_fraction(x_0, 0.9, 's'), (float) add_fraction(y_0, 0.06, 'a'), centre_pt_label);
 
+    char pt_label[256];
     if (impact == 1) {
         // print label for impact point
-        char pt_label[256];
-        snprintf(pt_label, sizeof(pt_label), "Impact! at t = %.3lf yrs, x = %.2e km, y = %.2e km", impact_t, impact_x * dist_multiplier, impact_y * dist_multiplier);
-        cpgsci(6);
-        cpgtext((float) 0.0, (float) add_fraction(impact_y, 0.1, 'a'), pt_label);
+        snprintf(pt_label, sizeof(pt_label), "Impact on mean path! t=%.3lf yrs, x=%.2e km, y=%.2e km", impact_t, impact_x * dist_multiplier, impact_y * dist_multiplier);
+        cpgsci(colour_mean);
+        cpgtext((float) 0.0, (float) add_fraction(impact_y, 0.28, 'a'), pt_label);
     }
 
     if (impact_sm == 1) {
         // print label for impact point
-        char pt_label[256];
-        snprintf(pt_label, sizeof(pt_label), "Impact! at t = %.3lf yrs, x = %.2e km, y = %.2e km", impact_t_sm, impact_x_sm * dist_multiplier, impact_y_sm * dist_multiplier);
-        cpgsci(7);
-        cpgtext((float) 0.0, (float) add_fraction(impact_y_sm, 0.1, 's'), pt_label);
+        snprintf(pt_label, sizeof(pt_label), "Impact on left path! t=%.3lf yrs, x=%.2e km, y=%.2e km", impact_t_sm, impact_x_sm * dist_multiplier, impact_y_sm * dist_multiplier);
+        cpgsci(colour_sm);
+        cpgtext((float) 0.0, (float) add_fraction(impact_y, 0.18, 'a'), pt_label);
     }
 
     if (impact_lg == 1) {
         // print label for impact point
-        char pt_label[256];
-        snprintf(pt_label, sizeof(pt_label), "Impact! at t = %.3lf yrs, x = %.2e km, y = %.2e km", impact_t_lg, impact_x_lg * dist_multiplier, impact_y_lg * dist_multiplier);
-        cpgsci(8);
-        cpgtext((float) 0.0, (float) add_fraction(impact_y_lg, 0.2, 'a'), pt_label);
+        snprintf(pt_label, sizeof(pt_label), "Impact on right path! t=%.4lf yrs, x=%.3e km, y=%.3e km", impact_t_lg, impact_x_lg * dist_multiplier, impact_y_lg * dist_multiplier);
+    } else {
+        snprintf(pt_label, sizeof(pt_label), "No impact on right path!");
     }
+    cpgsci(colour_lg);
+    cpgtext((float) 0.0, (float) add_fraction(impact_y, 0.08, 'a'), pt_label);
+
+    printf("Impact_lg: %d\n", impact_lg);
 
     cpgebuf();
 }
@@ -801,13 +816,13 @@ int main(void)
     snprintf(plot_file_name, sizeof(plot_file_name), "proj5plot-trP-%.0lf-%.0lf.ps/CPS", initial_t_multiplier, final_t_multiplier);
 
     //    if (cpgbeg(0, "?", 1, 1) != 1) {
-    if (cpgbeg(0, "/XWINDOW", 1, 1) != 1) {
-//    if (cpgbeg(0, "proj5plot.ps/CPS", 1, 1) != 1) {
+//    if (cpgbeg(0, "/XWINDOW", 1, 1) != 1) {
+    if (cpgbeg(0, "proj5plot.ps/CPS", 1, 1) != 1) {
         exit(EXIT_FAILURE);
     }
     cpgask(1);
 
-    disp_plot_traj(counter, plot_x_vals, plot_y_vals, -0.5, add_fraction(biggest_meas_val_x, 0.1, 'a'), 1.0, add_fraction(biggest_meas_val_y, 0.1, 'a'), state_vector_theta_k, estimate_covariance_P_k, initial_t, time_incr, "Plot of the trajectory of the asteroid", "Distance (units of 10,000,000 km)", "Distance (units of 10,000,000 km)");
+    disp_plot_traj(counter, plot_x_vals, plot_y_vals, -0.5, add_fraction(biggest_meas_val_x, 0.1, 'a'), 1.0, add_fraction(biggest_meas_val_y, 0.1, 'a'), state_vector_theta_k, estimate_covariance_P_k, initial_t, time_incr, "Plot of the possible trajectories of the asteroid", "Distance (units of 10,000,000 km)", "Distance (units of 10,000,000 km)");
 
     char plot_label[256];
     snprintf(plot_label, sizeof(plot_label), "Trace of P versus t, for t: pi * %.1lf - pi * %.1lf (%.3lf - %.3lf to 3 dec. plc.)", initial_t_multiplier, final_t_multiplier, initial_t, final_t);
