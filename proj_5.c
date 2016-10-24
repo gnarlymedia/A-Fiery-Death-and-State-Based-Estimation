@@ -16,7 +16,7 @@
 #define initial_A 2
 #define initial_B 2
 #define initial_P_diagonal_val 0.1
-#define R_diagonal_std_dev 0.006
+#define R_diagonal_std_dev 0.06
 
 #define initial_t_multiplier 2.0
 #define final_t_multiplier 3.0
@@ -308,12 +308,12 @@ matrix * Invert(matrix * me)
 static void readData(double ** xval, double ** yval, int * sizeX, int * sizeY)
 {
     // use on compphys server
-//    FILE* fx_data = fopen("/home/shudson1/proj_5/x_data_p06.dat", "rb");
-//    FILE* fy_data = fopen("/home/shudson1/proj_5/y_data_p06.dat", "rb");
+    FILE* fx_data = fopen("/home/shudson1/proj_5/x_data_p06.dat", "rb");
+    FILE* fy_data = fopen("/home/shudson1/proj_5/y_data_p06.dat", "rb");
 
     // use on virtual machine on mac
-    FILE* fx_data = fopen("/home/compphys/__uni_current/x_data_p06.dat", "rb");
-    FILE* fy_data = fopen("/home/compphys/__uni_current/y_data_p06.dat", "rb");
+//    FILE* fx_data = fopen("/home/compphys/__uni_current/x_data_p06.dat", "rb");
+//    FILE* fy_data = fopen("/home/compphys/__uni_current/y_data_p06.dat", "rb");
 
 //    printf("Results of read()! %s\n", strerror(errno));
     fseek(fx_data, 0, SEEK_END);
@@ -815,7 +815,7 @@ int main(void)
     char plot_file_name[256];
     snprintf(plot_file_name, sizeof(plot_file_name), "proj5plot-trP-%.0lf-%.0lf.ps/CPS", initial_t_multiplier, final_t_multiplier);
 
-    //    if (cpgbeg(0, "?", 1, 1) != 1) {
+//    if (cpgbeg(0, "?", 1, 1) != 1) {
 //    if (cpgbeg(0, "/XWINDOW", 1, 1) != 1) {
     if (cpgbeg(0, "proj5plot.ps/CPS", 1, 1) != 1) {
         exit(EXIT_FAILURE);
