@@ -2,9 +2,8 @@
 !/proj_*.c
 /core
 /Makefile
-/tute9*
 /gmon.out
 /prof_output*
-/pgplot*.log
-/matrices*.c
-/gsl.c
+/report/*
+!/report/Project*.tex
+!/report/plots/

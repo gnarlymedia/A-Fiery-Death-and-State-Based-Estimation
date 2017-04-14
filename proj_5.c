@@ -308,12 +308,12 @@ matrix * Invert(matrix * me)
 static void readData(double ** xval, double ** yval, int * sizeX, int * sizeY)
 {
     // use on compphys server
-    FILE* fx_data = fopen("/home/shudson1/proj_5/x_data_p06.dat", "rb");
-    FILE* fy_data = fopen("/home/shudson1/proj_5/y_data_p06.dat", "rb");
+//    FILE* fx_data = fopen("/home/shudson1/proj_5/x_data_p06.dat", "rb");
+//    FILE* fy_data = fopen("/home/shudson1/proj_5/y_data_p06.dat", "rb");
 
     // use on virtual machine on mac
-//    FILE* fx_data = fopen("/home/compphys/__uni_current/x_data_p06.dat", "rb");
-//    FILE* fy_data = fopen("/home/compphys/__uni_current/y_data_p06.dat", "rb");
+    FILE* fx_data = fopen("/home/compphys/__uni_current/x_data_p06.dat", "rb");
+    FILE* fy_data = fopen("/home/compphys/__uni_current/y_data_p06.dat", "rb");
 
 //    printf("Results of read()! %s\n", strerror(errno));
     fseek(fx_data, 0, SEEK_END);
@@ -816,8 +816,8 @@ int main(void)
     snprintf(plot_file_name, sizeof(plot_file_name), "proj5plot-trP-%.0lf-%.0lf.ps/CPS", initial_t_multiplier, final_t_multiplier);
 
 //    if (cpgbeg(0, "?", 1, 1) != 1) {
-//    if (cpgbeg(0, "/XWINDOW", 1, 1) != 1) {
-    if (cpgbeg(0, "proj5plot.ps/CPS", 1, 1) != 1) {
+    if (cpgbeg(0, "/XWINDOW", 1, 1) != 1) {
+//    if (cpgbeg(0, "proj5plot.ps/CPS", 1, 1) != 1) {
         exit(EXIT_FAILURE);
     }
     cpgask(1);
